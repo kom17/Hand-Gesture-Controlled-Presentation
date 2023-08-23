@@ -2,10 +2,10 @@ from cvzone.HandTrackingModule import HandDetector
 import cv2
 import os
 import numpy as np
-
+import speech_recognition as sr
 # Parameters
-width, height = 1280, 720
-gestureThreshold = 300
+width, height = 1280, 520
+gestureThreshold = 700
 folderPath = "Presentation"
 
 # Camera Setup
@@ -13,6 +13,7 @@ cap = cv2.VideoCapture(0)
 cap.set(3, width)
 cap.set(4, height)
 
+recognizer = sr.Recognizer()
 # Hand Detector
 detectorHand = HandDetector(detectionCon=0.8, maxHands=1)
 
@@ -28,6 +29,10 @@ annotations = [[]]
 annotationNumber = -1
 annotationStart = False
 hs, ws = int(120 * 1), int(213 * 1)  # width and height of small image
+
+# Zoom Parameters
+zoomScale = 1.0
+zoomSpeed = 0.02
 
 # Get list of presentation images
 pathImages = sorted(os.listdir(folderPath), key=len)
@@ -96,6 +101,51 @@ while True:
                 annotationNumber -= 1
                 buttonPressed = True
 
+        # Zoom Gesture
+        if fingers == [0, 1, 1, 1, 1]:
+            zoomScale += zoomSpeed
+            print("Zoom In:", zoomScale)
+        if fingers == [1, 1, 1, 1, 1]:
+            zoomScale -= zoomSpeed
+            if zoomScale < 1.0:
+                zoomScale = 1.0
+            print("Zoom Out:", zoomScale)
+            #go to slide feature
+        if fingers == [1, 0, 0, 0, 0]:
+            buttonPressed = True
+            print("Go to specific slide gesture detected")
+            try:
+                # Prompt user for slide number using voice command
+                with sr.Microphone() as source:
+                    print("Listening for slide number...")
+                    audio = recognizer.listen(source)
+                # Recognize the voice command
+                command = recognizer.recognize_google(audio).lower()
+                print("Voice Command:", command)
+                # Extract slide number from command
+                slide_number = int(command.split("slide")[-1].strip())
+                # Verify and navigate to the desired slide
+                if 0 <= slide_number < len(pathImages):
+                    imgNumber = slide_number
+                    annotations = [[]]
+                    annotationNumber = -1
+                    annotationStart = False
+                    print(f"Going to slide {slide_number}")
+                else:
+                    print("Invalid slide number")
+
+            except sr.UnknownValueError:
+                print("Could not understand audio")
+            except sr.RequestError as e:
+                print(f"Could not request results from Google Speech Recognition service; {e}")
+
+    # ... (rest of your code)
+
+
+
+
+
+
     else:
         annotationStart = False
 
@@ -110,6 +160,8 @@ while True:
             if j != 0:
                 cv2.line(imgCurrent, annotation[j - 1], annotation[j], (0, 0, 200), 12)
 
+    imgCurrent = cv2.resize(imgCurrent, None, fx=zoomScale, fy=zoomScale)
+
     imgSmall = cv2.resize(img, (ws, hs))
     h, w, _ = imgCurrent.shape
     imgCurrent[0:hs, w - ws: w] = imgSmall
@@ -120,3 +172,5 @@ while True:
     key = cv2.waitKey(1)
     if key == ord('q'):
         break
+
+cv2.destroyAllWindows()
